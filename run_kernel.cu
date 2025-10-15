@@ -1,7 +1,11 @@
+#include <algorithm>
 #include <cuda_runtime.h>
 #include <iostream>
+#include <numeric>
+#include <random>
 #include <string>
 
+#include "src/elements.h"
 #include "src/utils.cuh"
 #include "src/kernels.cuh"
 
@@ -53,6 +57,7 @@ int main() {
     constexpr size_t string_width{50U};
     print_gpu_device_info(string_width);
 
+    // Batch here represents blocks, i.e., batch_size = number of blocks.
     size_t const batch_size{2048 * 256};
     size_t const num_elements_per_batch{1024};
     print_profiling_header(string_width, batch_size, num_elements_per_batch);
@@ -67,9 +72,8 @@ int main() {
     cudaStream_t stream;
     CHECK_CUDA_ERROR(cudaStreamCreate(&stream));
 
-    constexpr float element_value{1.0f};
-    std::vector<float> X(num_elements, element_value);
-    std::vector<float> Y(batch_size, 0.0f);
+    // RandomElements elements(num_elements, batch_size, num_elements_per_batch);
+    ConstantElements elements(num_elements, batch_size, num_elements_per_batch);
 
     float* X_d;
     float *Y_d;
@@ -77,14 +81,13 @@ int main() {
     CHECK_CUDA_ERROR(cudaMalloc(&X_d, num_elements * sizeof(float)));
     CHECK_CUDA_ERROR(cudaMalloc(&Y_d, batch_size * sizeof(float)));
 
-    CHECK_CUDA_ERROR(cudaMemcpy(X_d, X.data(), num_elements * sizeof(float), cudaMemcpyHostToDevice));
+    CHECK_CUDA_ERROR(cudaMemcpy(X_d, elements.X.data(), num_elements * sizeof(float), cudaMemcpyHostToDevice));
 
     profile_naive<NUM_THREADS_PER_BATCH>(
         string_width,
-        Y,
+        elements,
         Y_d, X_d,
         stream,
-        element_value,
         batch_size, num_elements_per_batch);
     
     // profile_interleaved_address_1<NUM_THREADS_PER_BATCH>(
@@ -95,23 +98,31 @@ int main() {
     //     element_value,
     //     batch_size, num_elements_per_batch);
     
-    // profile_interleaved_address_2<NUM_THREADS_PER_BATCH>(
-    //     string_width,
-    //     Y,
-    //     Y_d, X_d,
-    //     stream,
-    //     element_value,
-    //     batch_size, num_elements_per_batch);
+    // // profile_interleaved_address_2<NUM_THREADS_PER_BATCH>(
+    // //     string_width,
+    // //     Y,
+    // //     Y_d, X_d,
+    // //     stream,
+    // //     element_value,
+    // //     batch_size, num_elements_per_batch);
     
-    // profile_sequential_address<NUM_THREADS_PER_BATCH>(
-    //     string_width,
-    //     Y,
-    //     Y_d, X_d,
-    //     stream,
-    //     element_value,
-    //     batch_size, num_elements_per_batch);
+    // // profile_sequential_address<NUM_THREADS_PER_BATCH>(
+    // //     string_width,
+    // //     Y,
+    // //     Y_d, X_d,
+    // //     stream,
+    // //     element_value,
+    // //     batch_size, num_elements_per_batch);
     
-    // // profile_halve_block_num<NUM_THREADS_PER_BATCH>(
+    // // // profile_halve_block_num<NUM_THREADS_PER_BATCH>(
+    // // //     string_width,
+    // // //     Y,
+    // // //     Y_d, X_d,
+    // // //     stream,
+    // // //     element_value,
+    // // //     batch_size, num_elements_per_batch);
+
+    // // profile_unroll_last_wrap<NUM_THREADS_PER_BATCH>(
     // //     string_width,
     // //     Y,
     // //     Y_d, X_d,
@@ -119,37 +130,29 @@ int main() {
     // //     element_value,
     // //     batch_size, num_elements_per_batch);
 
-    // profile_unroll_last_wrap<NUM_THREADS_PER_BATCH>(
-    //     string_width,
-    //     Y,
-    //     Y_d, X_d,
-    //     stream,
-    //     element_value,
-    //     batch_size, num_elements_per_batch);
+    // // profile_fully_unroll<NUM_THREADS_PER_BATCH>(
+    // //     string_width,
+    // //     Y,
+    // //     Y_d, X_d,
+    // //     stream,
+    // //     element_value,
+    // //     batch_size, num_elements_per_batch);
 
-    // profile_fully_unroll<NUM_THREADS_PER_BATCH>(
-    //     string_width,
-    //     Y,
-    //     Y_d, X_d,
-    //     stream,
-    //     element_value,
-    //     batch_size, num_elements_per_batch);
+    // // profile_warp_shuffle<NUM_THREADS_PER_BATCH>(
+    // //     string_width,
+    // //     Y,
+    // //     Y_d, X_d,
+    // //     stream,
+    // //     element_value,
+    // //     batch_size, num_elements_per_batch);
 
-    // profile_warp_shuffle<NUM_THREADS_PER_BATCH>(
-    //     string_width,
-    //     Y,
-    //     Y_d, X_d,
-    //     stream,
-    //     element_value,
-    //     batch_size, num_elements_per_batch);
-
-    // profile_vectorize_load<NUM_THREADS_PER_BATCH>(
-    //     string_width,
-    //     Y,
-    //     Y_d, X_d,
-    //     stream,
-    //     element_value,
-    //     batch_size, num_elements_per_batch);
+    // // profile_vectorize_load<NUM_THREADS_PER_BATCH>(
+    // //     string_width,
+    // //     Y,
+    // //     Y_d, X_d,
+    // //     stream,
+    // //     element_value,
+    // //     batch_size, num_elements_per_batch);
 
 
     CHECK_CUDA_ERROR(cudaFree(X_d));

@@ -1,10 +1,14 @@
 #pragma once
 
+#include <algorithm>
 #include <cassert>
+#include <cmath>
 #include <cuda_runtime.h>
 #include <functional>
 #include <iostream>
 #include <string>
+
+#include "elements.h"
 
 
 #define CHECK_CUDA_ERROR(value) check((value), #value, __FILE__, __LINE__)
@@ -89,11 +93,10 @@ float measure_performance_in_ms(
  */
 void profile_batched_kernel(
     std::function<void(float*, float const*, size_t, size_t, cudaStream_t)> batched_launch_function,
-    std::vector<float> Y,
+    Elements& elements,
     float* Y_d,
     float *X_d,
     cudaStream_t stream,
-    float element_value,
     size_t batch_size, size_t num_elements_per_batch
 ) {
     size_t const num_elements{batch_size * num_elements_per_batch};
@@ -102,15 +105,9 @@ void profile_batched_kernel(
     CHECK_CUDA_ERROR(cudaStreamSynchronize(stream));
 
     // Verify the correctness of the kernel.
-    CHECK_CUDA_ERROR(cudaMemcpy(Y.data(), Y_d, batch_size * sizeof(float), cudaMemcpyDeviceToHost));
-
-    for (size_t i = 0; i < batch_size; ++i) {
-        if (Y.at(i) != num_elements_per_batch * element_value) {
-            std::cout << "Expected: " << num_elements_per_batch * element_value
-                      << " but got: " << Y.at(i) << std::endl;
-            throw std::runtime_error("Error: incorrect sum");
-        }
-    }
+    CHECK_CUDA_ERROR(cudaMemcpy(elements.Y.data(), Y_d, batch_size * sizeof(float), cudaMemcpyDeviceToHost));
+    elements.verify_kernel();
+    
     std::function<void(cudaStream_t)> const bound_function{
         std::bind(
             batched_launch_function, Y_d, X_d, batch_size, num_elements_per_batch, std::placeholders::_1
