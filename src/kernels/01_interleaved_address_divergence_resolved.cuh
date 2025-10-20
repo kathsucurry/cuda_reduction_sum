@@ -5,7 +5,7 @@
 
 
 template <size_t NUM_THREADS>
-__global__ void batched_sequential_address(
+__global__ void batched_interleaved_address_divergence_resolved(
     float* __restrict__ Y,
     float const* __restrict__ X,
     size_t num_elements_per_batch
@@ -20,11 +20,14 @@ __global__ void batched_sequential_address(
     X += block_idx * num_elements_per_batch;
     // Store a single element per thread in shared memory.
     shared_data[thread_idx] = X[thread_idx];
+    __syncthreads();
 
-    for (size_t stride = NUM_THREADS / 2; stride > 0; stride >>= 1) {
+    for (size_t stride = 1; stride < NUM_THREADS; stride *= 2) {
+        size_t index = 2 * stride * thread_idx;
+
+        if (index < NUM_THREADS)
+            shared_data[index] += shared_data[index + stride];
         __syncthreads();
-        if (thread_idx < stride)
-            shared_data[thread_idx] += shared_data[thread_idx + stride];
     }
 
     if (thread_idx == 0)
@@ -33,7 +36,7 @@ __global__ void batched_sequential_address(
 
 
 template <size_t NUM_THREADS>
-void launch_batched_sequential_address(
+void launch_batched_interleaved_address_divergence_resolved(
     float* Y,
     float const* X,
     size_t batch_size,
@@ -41,14 +44,14 @@ void launch_batched_sequential_address(
     cudaStream_t stream
 ) {
     size_t const num_blocks{batch_size};
-    batched_sequential_address<NUM_THREADS>
+    batched_interleaved_address_divergence_resolved<NUM_THREADS>
         <<<num_blocks, NUM_THREADS, 0, stream>>>(Y, X, num_elements_per_batch);
     CHECK_LAST_CUDA_ERROR();
 }
 
 
 template <size_t NUM_THREADS>
-void profile_sequential_address(
+void profile_interleaved_address_divergence_resolved(
     size_t string_width,
     Elements& elements,
     float* Y_d,
@@ -56,9 +59,9 @@ void profile_sequential_address(
     cudaStream_t stream,
     size_t batch_size, size_t num_elements_per_batch
 ) {
-    std::cout << "Batched reduce sum - SEQUENTIAL ADDRESS" << std::endl;
+    std::cout << "Batched reduce sum - INTERLEAVED ADDRESS + DIVERGENCE RESOLVED" << std::endl;
     profile_batched_kernel(
-        launch_batched_sequential_address<NUM_THREADS>,
+        launch_batched_interleaved_address_divergence_resolved<NUM_THREADS>,
         elements, Y_d, X_d, stream,
         batch_size, num_elements_per_batch
     );

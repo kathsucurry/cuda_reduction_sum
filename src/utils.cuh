@@ -49,7 +49,7 @@ std::string std_string_centered(std::string const& str, size_t width, char paddi
 template <class T>
 float measure_performance_in_ms(
     std::function<T(cudaStream_t)> bound_function,
-    cudaStream_t stream, size_t num_repeats = 10,
+    cudaStream_t stream, size_t num_repeats = 50,
     size_t num_warmups = 10
 ) {
     cudaEvent_t start, stop;

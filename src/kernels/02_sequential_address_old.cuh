@@ -4,7 +4,7 @@
 
 
 template <size_t NUM_THREADS>
-__global__ void batched_interleaved_address_1(
+__global__ void batched_sequential_address(
     float* __restrict__ Y,
     float const* __restrict__ X,
     size_t num_elements_per_batch
@@ -15,7 +15,6 @@ __global__ void batched_interleaved_address_1(
     size_t const thread_idx{threadIdx.x};
     __shared__ float shared_data[NUM_THREADS];
     size_t const num_elements_per_thread{(num_elements_per_batch + NUM_THREADS - 1) / NUM_THREADS};
-
     X += block_idx * num_elements_per_batch;
     float sum{0.0f};
 
@@ -28,20 +27,18 @@ __global__ void batched_interleaved_address_1(
     shared_data[thread_idx] = sum;
     __syncthreads();
 
-    // Follow Mark Haris' deck to evaluate the performance.
-    for (size_t stride = 1; stride < NUM_THREADS; stride *= 2) {
-        if (thread_idx % (2 * stride) == 0)
+    for (size_t stride = NUM_THREADS / 2; stride > 0; stride >>= 1) {
+        if (thread_idx < stride)
             shared_data[thread_idx] += shared_data[thread_idx + stride];
         __syncthreads();
     }
-
     if (thread_idx == 0)
         Y[block_idx] = shared_data[0];
 }
 
 
 template <size_t NUM_THREADS>
-void launch_batched_interleaved_address_1(
+void launch_batched_sequential_address(
     float* Y,
     float const* X,
     size_t batch_size,
@@ -49,14 +46,14 @@ void launch_batched_interleaved_address_1(
     cudaStream_t stream
 ) {
     size_t const num_blocks{batch_size};
-    batched_interleaved_address_1<NUM_THREADS>
+    batched_sequential_address<NUM_THREADS>
         <<<num_blocks, NUM_THREADS, 0, stream>>>(Y, X, num_elements_per_batch);
     CHECK_LAST_CUDA_ERROR();
 }
 
 
 template <size_t NUM_THREADS>
-void profile_interleaved_address_1(
+void profile_sequential_address(
     size_t string_width,
     std::vector<float> Y,
     float* Y_d,
@@ -65,9 +62,9 @@ void profile_interleaved_address_1(
     float element_value,
     size_t batch_size, size_t num_elements_per_batch
 ) {
-    std::cout << "Batched reduce sum - INTERLEAVED ADDRESSING #1" << std::endl;
+    std::cout << "Batched reduce sum - SEQUENTIAL ADDRESSING" << std::endl;
     profile_batched_kernel(
-        launch_batched_interleaved_address_1<NUM_THREADS>,
+        launch_batched_sequential_address<NUM_THREADS>,
         Y, Y_d, X_d, stream, element_value,
         batch_size, num_elements_per_batch
     );

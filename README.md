@@ -6,6 +6,11 @@ cmake ..
 cmake --build .
 ```
 
+# Debugging
+
+The threads in Kernel 0 to 2 only process one element each, i.e., `num_elements_per_batch` and `NUM_THREADS_PER_BATCH` must be identical. If the values differ, it would cause incorrect sum error since each thread only processes one element. Automating or adding additional checks to avoid this issue would be one possible next step.
+
+
 # Resources
 
 - [Optimizing Parallel Reduction in CUDA](https://developer.download.nvidia.com/compute/cuda/1.1-Beta/x86_website/projects/reduction/doc/reduction.pdf) by Mark Harris
