@@ -110,19 +110,26 @@ int main() {
     //     stream,
     //     batch_size, num_elements_per_batch);
 
-    profile_sequential_address<NUM_THREADS_PER_BATCH>(
+    // profile_sequential_address<NUM_THREADS_PER_BATCH>(
+    //     string_width,
+    //     elements,
+    //     Y_d, X_d,
+    //     stream,
+    //     batch_size, num_elements_per_batch);
+
+    profile_reposition_syncthread<NUM_THREADS_PER_BATCH>(
         string_width,
         elements,
         Y_d, X_d,
         stream,
         batch_size, num_elements_per_batch);
 
-    profile_thread_coarsening<NUM_THREADS_PER_BATCH>(
-        string_width,
-        elements,
-        Y_d, X_d,
-        stream,
-        batch_size, num_elements_per_batch);
+    // profile_thread_coarsening<NUM_THREADS_PER_BATCH>(
+    //     string_width,
+    //     elements,
+    //     Y_d, X_d,
+    //     stream,
+    //     batch_size, num_elements_per_batch);
     
     // // // profile_halve_block_num<NUM_THREADS_PER_BATCH>(
     // // //     string_width,

@@ -20,11 +20,12 @@ __global__ void batched_sequential_address(
     X += block_idx * num_elements_per_batch;
     // Store a single element per thread in shared memory.
     shared_data[thread_idx] = X[thread_idx];
+    __syncthreads();
 
     for (size_t stride = NUM_THREADS / 2; stride > 0; stride >>= 1) {
-        __syncthreads();
         if (thread_idx < stride)
             shared_data[thread_idx] += shared_data[thread_idx + stride];
+        __syncthreads();
     }
 
     if (thread_idx == 0)
