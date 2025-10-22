@@ -5,7 +5,7 @@
 
 
 template <size_t NUM_THREADS>
-__global__ void batched_thread_coarsening(
+__global__ void batched_thread_coarsening_uncoalesced(
     float* __restrict__ Y,
     float const* __restrict__ X,
     size_t num_elements_per_batch
@@ -26,7 +26,7 @@ __global__ void batched_thread_coarsening(
     float sum{0.0f};
     
     for (size_t i = 0; i < num_elements_per_thread; ++i) {
-        size_t const offset{thread_idx + i * NUM_THREADS};
+        size_t const offset{thread_idx * num_elements_per_thread + i};
         if (offset < num_elements_per_batch)
             sum += X[offset];
     }
@@ -45,7 +45,7 @@ __global__ void batched_thread_coarsening(
 
 
 template <size_t NUM_THREADS>
-void launch_batched_thread_coarsening(
+void launch_batched_thread_coarsening_uncoalesced(
     float* Y,
     float const* X,
     size_t batch_size,
@@ -53,14 +53,14 @@ void launch_batched_thread_coarsening(
     cudaStream_t stream
 ) {
     size_t const num_blocks{batch_size};
-    batched_thread_coarsening<NUM_THREADS>
+    batched_thread_coarsening_uncoalesced<NUM_THREADS>
         <<<num_blocks, NUM_THREADS, 0, stream>>>(Y, X, num_elements_per_batch);
     CHECK_LAST_CUDA_ERROR();
 }
 
 
 template <size_t NUM_THREADS>
-void profile_thread_coarsening(
+void profile_thread_coarsening_uncoalesced(
     size_t string_width,
     Elements& elements,
     float* Y_d,
@@ -70,7 +70,7 @@ void profile_thread_coarsening(
 ) {
     std::cout << "Batched reduce sum - THREAD COARSENING" << std::endl;
     profile_batched_kernel(
-        launch_batched_thread_coarsening<NUM_THREADS>,
+        launch_batched_thread_coarsening_uncoalesced<NUM_THREADS>,
         elements, Y_d, X_d, stream,
         batch_size, num_elements_per_batch
     );

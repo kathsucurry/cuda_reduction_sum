@@ -71,8 +71,8 @@ int main() {
     // Batch here represents blocks, i.e., batch_size = number of blocks.
     // When thread coarsening is used, make sure that `num_elements_per_batch` =
     // `NUM_THREADS_PER_BATCH` * # elements per thread.
-    size_t const batch_size{2048 * 2048};
-    size_t const num_elements_per_batch{128 * 1};
+    size_t const batch_size{2048 * 64};
+    size_t const num_elements_per_batch{128 * 32};
     print_profiling_header(string_width, batch_size, num_elements_per_batch);
 
     constexpr size_t NUM_THREADS_PER_BATCH{128};
@@ -85,8 +85,8 @@ int main() {
     CHECK_CUDA_ERROR(cudaStreamCreate(&stream));
 
     // Generate list elements.
-    // RandomElements elements(num_elements, batch_size, num_elements_per_batch);
-    ConstantElements elements(num_elements, batch_size, num_elements_per_batch);
+    RandomElements elements(num_elements, batch_size, num_elements_per_batch);
+    // ConstantElements elements(num_elements, batch_size, num_elements_per_batch);
 
     float* X_d;
     float *Y_d;
@@ -117,12 +117,19 @@ int main() {
     //     stream,
     //     batch_size, num_elements_per_batch);
 
-    profile_reposition_syncthread<NUM_THREADS_PER_BATCH>(
-        string_width,
-        elements,
-        Y_d, X_d,
-        stream,
-        batch_size, num_elements_per_batch);
+    // profile_reposition_syncthread<NUM_THREADS_PER_BATCH>(
+    //     string_width,
+    //     elements,
+    //     Y_d, X_d,
+    //     stream,
+    //     batch_size, num_elements_per_batch);
+
+    // profile_thread_coarsening_two_elements<NUM_THREADS_PER_BATCH>(
+    //     string_width,
+    //     elements,
+    //     Y_d, X_d,
+    //     stream,
+    //     batch_size, num_elements_per_batch);
 
     // profile_thread_coarsening<NUM_THREADS_PER_BATCH>(
     //     string_width,
@@ -130,6 +137,13 @@ int main() {
     //     Y_d, X_d,
     //     stream,
     //     batch_size, num_elements_per_batch);
+
+    profile_thread_coarsening_uncoalesced<NUM_THREADS_PER_BATCH>(
+        string_width,
+        elements,
+        Y_d, X_d,
+        stream,
+        batch_size, num_elements_per_batch);
     
     // // // profile_halve_block_num<NUM_THREADS_PER_BATCH>(
     // // //     string_width,

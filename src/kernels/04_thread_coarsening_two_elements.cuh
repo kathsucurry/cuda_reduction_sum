@@ -5,7 +5,7 @@
 
 
 template <size_t NUM_THREADS>
-__global__ void batched_thread_coarsening(
+__global__ void batched_thread_coarsening_two_elements(
     float* __restrict__ Y,
     float const* __restrict__ X,
     size_t num_elements_per_batch
@@ -18,19 +18,8 @@ __global__ void batched_thread_coarsening(
 
     // Shift the input accordingly to the batch (block) index.
     X += block_idx * num_elements_per_batch;
-    
-    // Compute the number of elements each thread will process.
-    size_t const num_elements_per_thread{(num_elements_per_batch + NUM_THREADS - 1) / NUM_THREADS};
-    
-    // Initialize the sum variable.
-    float sum{0.0f};
-    
-    for (size_t i = 0; i < num_elements_per_thread; ++i) {
-        size_t const offset{thread_idx + i * NUM_THREADS};
-        if (offset < num_elements_per_batch)
-            sum += X[offset];
-    }
-    shared_data[thread_idx] = sum;
+    // Sum two elements and store in shared memory.
+    shared_data[thread_idx] = X[thread_idx] + X[thread_idx + NUM_THREADS];
 
     // Note that the synchronization has been moved to the beginning of the loop below.
     for (size_t stride = NUM_THREADS / 2; stride > 0; stride >>= 1) {
@@ -45,7 +34,7 @@ __global__ void batched_thread_coarsening(
 
 
 template <size_t NUM_THREADS>
-void launch_batched_thread_coarsening(
+void launch_batched_thread_coarsening_two_elements(
     float* Y,
     float const* X,
     size_t batch_size,
@@ -53,14 +42,14 @@ void launch_batched_thread_coarsening(
     cudaStream_t stream
 ) {
     size_t const num_blocks{batch_size};
-    batched_thread_coarsening<NUM_THREADS>
+    batched_thread_coarsening_two_elements<NUM_THREADS>
         <<<num_blocks, NUM_THREADS, 0, stream>>>(Y, X, num_elements_per_batch);
     CHECK_LAST_CUDA_ERROR();
 }
 
 
 template <size_t NUM_THREADS>
-void profile_thread_coarsening(
+void profile_thread_coarsening_two_elements(
     size_t string_width,
     Elements& elements,
     float* Y_d,
@@ -68,9 +57,9 @@ void profile_thread_coarsening(
     cudaStream_t stream,
     size_t batch_size, size_t num_elements_per_batch
 ) {
-    std::cout << "Batched reduce sum - THREAD COARSENING" << std::endl;
+    std::cout << "Batched reduce sum - THREAD COARSENING (2 ELEMENTS)" << std::endl;
     profile_batched_kernel(
-        launch_batched_thread_coarsening<NUM_THREADS>,
+        launch_batched_thread_coarsening_two_elements<NUM_THREADS>,
         elements, Y_d, X_d, stream,
         batch_size, num_elements_per_batch
     );
