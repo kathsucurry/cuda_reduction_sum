@@ -13,8 +13,8 @@ __device__ void warp_reduce(volatile float* shared_data, size_t thread_idx) {
 }
 
 
-template <size_t NUM_THREADS, size_t NUM_THREADS_PER_WRAP>
-__global__ void batched_unroll_last_wrap(
+template <size_t NUM_THREADS, size_t NUM_THREADS_PER_WARP>
+__global__ void batched_unroll_last_warp(
     float* __restrict__ Y,
     float const* __restrict__ X,
     size_t num_elements_per_batch
@@ -25,27 +25,32 @@ __global__ void batched_unroll_last_wrap(
     size_t const thread_idx{threadIdx.x};
     __shared__ float shared_data[NUM_THREADS];
 
-    size_t const num_elements_per_thread{(num_elements_per_batch + NUM_THREADS - 1) / NUM_THREADS};
+    // Shift the input accordingly to the batch (block) index.
     X += block_idx * num_elements_per_batch;
-    float sum{0.0f};
 
-    // Handle elements of the indices > thread index.
+    // Compute the number of elements each thread will process.
+    size_t const num_elements_per_thread{(num_elements_per_batch + NUM_THREADS - 1) / NUM_THREADS};
+    
+    // Initialize the sum variable.
+    float sum{0.0f};
+    
     for (size_t i = 0; i < num_elements_per_thread; ++i) {
         size_t const offset{thread_idx + i * NUM_THREADS};
         if (offset < num_elements_per_batch)
             sum += X[offset];
     }
     shared_data[thread_idx] = sum;
-    __syncthreads();
 
-    for (size_t stride = NUM_THREADS / 2; stride > NUM_THREADS_PER_WRAP; stride >>= 1) {
+    for (size_t stride = NUM_THREADS / 2; stride > NUM_THREADS_PER_WARP; stride >>= 1) {
+        __syncthreads();
         if (thread_idx < stride)
             shared_data[thread_idx] += shared_data[thread_idx + stride];
-        __syncthreads();
     }
 
-    if (thread_idx < NUM_THREADS_PER_WRAP)
+    if (thread_idx < NUM_THREADS_PER_WARP) {
+        __syncthreads();
         warp_reduce(shared_data, thread_idx);
+    }
 
     if (thread_idx == 0)
         Y[block_idx] = shared_data[0];
@@ -53,7 +58,7 @@ __global__ void batched_unroll_last_wrap(
 
 
 template <size_t NUM_THREADS>
-void launch_batched_unroll_last_wrap(
+void launch_batched_unroll_last_warp(
     float* Y,
     float const* X,
     size_t batch_size,
@@ -62,26 +67,25 @@ void launch_batched_unroll_last_wrap(
 ) {
     constexpr size_t NUM_THREADS_PER_WARP{32};
     size_t const num_blocks{batch_size};
-    batched_unroll_last_wrap<NUM_THREADS, NUM_THREADS_PER_WARP>
+    batched_unroll_last_warp<NUM_THREADS, NUM_THREADS_PER_WARP>
         <<<num_blocks, NUM_THREADS, 0, stream>>>(Y, X, num_elements_per_batch);
     CHECK_LAST_CUDA_ERROR();
 }
 
 
 template <size_t NUM_THREADS>
-void profile_unroll_last_wrap(
+void profile_unroll_last_warp(
     size_t string_width,
-    std::vector<float> Y,
+    Elements& elements,
     float* Y_d,
     float *X_d,
     cudaStream_t stream,
-    float element_value,
     size_t batch_size, size_t num_elements_per_batch
 ) {
-    std::cout << "Batched reduce sum - UNROLL LAST WRAP" << std::endl;
+    std::cout << "Batched reduce sum - UNROLL LAST WARP" << std::endl;
     profile_batched_kernel(
-        launch_batched_unroll_last_wrap<NUM_THREADS>,
-        Y, Y_d, X_d, stream, element_value,
+        launch_batched_unroll_last_warp<NUM_THREADS>,
+        elements, Y_d, X_d, stream,
         batch_size, num_elements_per_batch
     );
     std::cout << std_string_centered("", string_width, '-') << std::endl;

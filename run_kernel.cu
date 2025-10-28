@@ -85,8 +85,8 @@ int main() {
     CHECK_CUDA_ERROR(cudaStreamCreate(&stream));
 
     // Generate list elements.
-    RandomElements elements(num_elements, batch_size, num_elements_per_batch);
-    // ConstantElements elements(num_elements, batch_size, num_elements_per_batch);
+    // RandomElements elements(num_elements, batch_size, num_elements_per_batch);
+    ConstantElements elements(num_elements, batch_size, num_elements_per_batch);
 
     float* X_d;
     float *Y_d;
@@ -138,52 +138,40 @@ int main() {
     //     stream,
     //     batch_size, num_elements_per_batch);
 
-    profile_thread_coarsening_uncoalesced<NUM_THREADS_PER_BATCH>(
+    // profile_thread_coarsening_uncoalesced<NUM_THREADS_PER_BATCH>(
+    //     string_width,
+    //     elements,
+    //     Y_d, X_d,
+    //     stream,
+    //     batch_size, num_elements_per_batch);
+
+    // profile_unroll_last_warp<NUM_THREADS_PER_BATCH>(
+    //     string_width,
+    //     elements,
+    //     Y_d, X_d,
+    //     stream,
+    //     batch_size, num_elements_per_batch);
+
+    // profile_fully_unroll<NUM_THREADS_PER_BATCH>(
+    //     string_width,
+    //     elements,
+    //     Y_d, X_d,
+    //     stream,
+    //     batch_size, num_elements_per_batch);
+    
+    // profile_warp_shuffle<NUM_THREADS_PER_BATCH>(
+    //     string_width,
+    //     elements,
+    //     Y_d, X_d,
+    //     stream,
+    //     batch_size, num_elements_per_batch);
+
+    profile_vectorize_load<NUM_THREADS_PER_BATCH>(
         string_width,
         elements,
         Y_d, X_d,
         stream,
         batch_size, num_elements_per_batch);
-    
-    // // // profile_halve_block_num<NUM_THREADS_PER_BATCH>(
-    // // //     string_width,
-    // // //     Y,
-    // // //     Y_d, X_d,
-    // // //     stream,
-    // // //     element_value,
-    // // //     batch_size, num_elements_per_batch);
-
-    // // profile_unroll_last_wrap<NUM_THREADS_PER_BATCH>(
-    // //     string_width,
-    // //     Y,
-    // //     Y_d, X_d,
-    // //     stream,
-    // //     element_value,
-    // //     batch_size, num_elements_per_batch);
-
-    // // profile_fully_unroll<NUM_THREADS_PER_BATCH>(
-    // //     string_width,
-    // //     Y,
-    // //     Y_d, X_d,
-    // //     stream,
-    // //     element_value,
-    // //     batch_size, num_elements_per_batch);
-
-    // // profile_warp_shuffle<NUM_THREADS_PER_BATCH>(
-    // //     string_width,
-    // //     Y,
-    // //     Y_d, X_d,
-    // //     stream,
-    // //     element_value,
-    // //     batch_size, num_elements_per_batch);
-
-    // // profile_vectorize_load<NUM_THREADS_PER_BATCH>(
-    // //     string_width,
-    // //     Y,
-    // //     Y_d, X_d,
-    // //     stream,
-    // //     element_value,
-    // //     batch_size, num_elements_per_batch);
 
 
     CHECK_CUDA_ERROR(cudaFree(X_d));

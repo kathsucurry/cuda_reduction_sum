@@ -17,9 +17,14 @@ __global__ void batched_vectorize_load(
 
     // The shared data is now among warps rather than threads.
     __shared__ float shared_data[NUM_WARPS];
-
+    
+    // Shift the input accordingly to the batch (block) index.
     X += block_idx * num_elements_per_batch;
+
+    // Compute the number of elements each thread will process.
     size_t const num_elements_per_thread{(num_elements_per_batch + NUM_THREADS - 1) / NUM_THREADS};
+
+    // Initialize the sum variable.
     float sum{0.0f};
 
     // Handle elements of the indices > thread index.
@@ -32,22 +37,28 @@ __global__ void batched_vectorize_load(
     }
 
     constexpr unsigned int FULL_MASK{0xffffffff};
-#pragma unroll
-    for (size_t offset = 16; offset > 0; offset /= 2) {
-        sum += __shfl_xor_sync(FULL_MASK, sum, offset);
+    for (size_t offset = 16; offset > 0; offset >>= 1) {
+        sum += __shfl_down_sync(FULL_MASK, sum, offset);
     }
 
+    // Store the warp element sum in shared_memory.
     if (thread_idx % 32 == 0)
         shared_data[thread_idx / 32] = sum;
     __syncthreads();
 
-    float block_sum{0.0f};
-#pragma unroll
-    for (size_t i = 0; i < NUM_WARPS; ++i)
-        block_sum += shared_data[i];
+    // Determine active threads for obtaining block sum.
+    unsigned int const active_threads_mask = __ballot_sync(FULL_MASK, thread_idx < NUM_WARPS);
+
+    if (thread_idx < NUM_WARPS) {
+        // Reuse sum variable to store the shared memory elements.
+        sum = shared_data[thread_idx];
+        for (size_t offset = 16; offset > 0; offset >>= 1) {
+            sum += __shfl_down_sync(active_threads_mask, sum, offset);
+        }
+    }
     
     if (thread_idx == 0)
-        Y[block_idx] = block_sum;
+        Y[block_idx] = sum;
 }
 
 
@@ -69,17 +80,16 @@ void launch_batched_vectorize_load(
 template <size_t NUM_THREADS>
 void profile_vectorize_load(
     size_t string_width,
-    std::vector<float> Y,
+    Elements& elements,
     float* Y_d,
     float *X_d,
     cudaStream_t stream,
-    float element_value,
     size_t batch_size, size_t num_elements_per_batch
 ) {
     std::cout << "Batched reduce sum - VECTORIZE LOAD" << std::endl;
     profile_batched_kernel(
         launch_batched_vectorize_load<NUM_THREADS>,
-        Y, Y_d, X_d, stream, element_value,
+        elements, Y_d, X_d, stream,
         batch_size, num_elements_per_batch
     );
     std::cout << std_string_centered("", string_width, '-') << std::endl;
