@@ -46,36 +46,55 @@ std::string std_string_centered(std::string const& str, size_t width, char paddi
 }
 
 
+__global__ void cache_flush(float *buffer, size_t N) {
+    size_t i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < N) buffer[i] = buffer[i] + 0.0f;
+}
+
+
+void launch_cache_flush(float *buffer, size_t N) {
+    size_t const block_size{1024};
+    size_t const grid_size{(N + block_size - 1) / block_size};
+    cache_flush<<<grid_size, block_size>>>(buffer, N);
+}
+
+
 template <class T>
 float measure_performance_in_ms(
     std::function<T(cudaStream_t)> bound_function,
+    std::function<void()> cache_flush_function,
     cudaStream_t stream, size_t num_repeats = 50,
     size_t num_warmups = 10
 ) {
-    cudaEvent_t start, stop;
-    float elapsed_time;
-
-    CHECK_CUDA_ERROR(cudaEventCreate(&start));
-    CHECK_CUDA_ERROR(cudaEventCreate(&stop));
-
     for (size_t i = 0; i < num_warmups; ++i)
         bound_function(stream);
+
+    float elapsed_time;
+    float total_elapsed_time{0.0f};
+
+    cudaEvent_t start, stop;
+    CHECK_CUDA_ERROR(cudaEventCreate(&start));
+    CHECK_CUDA_ERROR(cudaEventCreate(&stop));
     
     CHECK_CUDA_ERROR(cudaStreamSynchronize(stream));
-
-    CHECK_CUDA_ERROR(cudaEventRecord(start, stream));
-    for (size_t i = 0; i < num_repeats; ++i)
-        bound_function(stream);
     
-    CHECK_CUDA_ERROR(cudaEventRecord(stop, stream));
-    CHECK_CUDA_ERROR(cudaEventSynchronize(stop));
+    for (size_t i = 0; i < num_repeats; ++i) {
+        cache_flush_function();
+        CHECK_CUDA_ERROR(cudaStreamSynchronize(stream));
+        CHECK_CUDA_ERROR(cudaEventRecord(start, stream));
+        bound_function(stream);
+        CHECK_CUDA_ERROR(cudaEventRecord(stop, stream));
+        CHECK_CUDA_ERROR(cudaEventSynchronize(stop));
+        CHECK_CUDA_ERROR(cudaEventElapsedTime(&elapsed_time, start, stop));
+        total_elapsed_time += elapsed_time;
+    }
+    
     CHECK_LAST_CUDA_ERROR();
 
-    CHECK_CUDA_ERROR(cudaEventElapsedTime(&elapsed_time, start, stop));
     CHECK_CUDA_ERROR(cudaEventDestroy(start));
     CHECK_CUDA_ERROR(cudaEventDestroy(stop));
 
-    float const latency_ms{elapsed_time / num_repeats};
+    float const latency_ms{total_elapsed_time / num_repeats};
 
     return latency_ms;
 }
@@ -113,7 +132,16 @@ void profile_batched_kernel(
             batched_launch_function, Y_d, X_d, batch_size, num_elements_per_batch, std::placeholders::_1
         )
     };
-    float const latency{measure_performance_in_ms<void>(bound_function, stream)};
+
+    float *buffer;
+    size_t const buffer_size{25000000};
+    CHECK_CUDA_ERROR(cudaMalloc(&buffer, buffer_size * sizeof(float)));
+    CHECK_CUDA_ERROR(cudaMemset(buffer, 0, buffer_size * sizeof(float)));
+    std::function<void()> const flush_function{std::bind(launch_cache_flush, buffer, buffer_size)};
+
+    float const latency{measure_performance_in_ms<void>(bound_function, flush_function, stream)};
+    CHECK_CUDA_ERROR(cudaFree(buffer));
+
     std::cout << "Latency: " << latency * 1000.0 << " us" << std::endl;
 
     // Compute effective bandwidth.

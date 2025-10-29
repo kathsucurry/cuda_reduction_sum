@@ -56,7 +56,7 @@ void profile_reposition_syncthread(
     cudaStream_t stream,
     size_t batch_size, size_t num_elements_per_batch
 ) {
-    std::cout << "Batched reduce sum - SEQUENTIAL ADDRESS" << std::endl;
+    std::cout << "Batched reduce sum - REPOSITION SYNCTHREAD" << std::endl;
     profile_batched_kernel(
         launch_batched_reposition_syncthread<NUM_THREADS>,
         elements, Y_d, X_d, stream,
