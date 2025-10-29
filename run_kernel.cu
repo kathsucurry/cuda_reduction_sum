@@ -71,9 +71,8 @@ int main() {
     // Batch here represents blocks, i.e., batch_size = number of blocks.
     // When thread coarsening is used, make sure that `num_elements_per_batch` =
     // `NUM_THREADS_PER_BATCH` * # elements per thread.
-    // size_t const batch_size{2048 * 64 * 32};
-    size_t const batch_size{4096 * 1024 / 64};
-    size_t const num_elements_per_batch{128 * 64};
+    size_t const batch_size{4096 * 1024 / 32};
+    size_t const num_elements_per_batch{128 * 32};
     print_profiling_header(string_width, batch_size, num_elements_per_batch);
 
     constexpr size_t NUM_THREADS_PER_BATCH{128};
@@ -129,13 +128,13 @@ int main() {
     //     stream,
     //     batch_size, num_elements_per_batch);
 
-    // Kernel 4.
-    profile_thread_coarsening<NUM_THREADS_PER_BATCH>(
-        string_width,
-        elements,
-        Y_d, X_d,
-        stream,
-        batch_size, num_elements_per_batch);
+    // // Kernel 4.
+    // profile_thread_coarsening<NUM_THREADS_PER_BATCH>(
+    //     string_width,
+    //     elements,
+    //     Y_d, X_d,
+    //     stream,
+    //     batch_size, num_elements_per_batch);
 
     // // Kernel 5.
     // profile_unroll_last_warp<NUM_THREADS_PER_BATCH>(
@@ -153,13 +152,13 @@ int main() {
     //     stream,
     //     batch_size, num_elements_per_batch);
     
-    // Kernel 6.
-    profile_warp_shuffle<NUM_THREADS_PER_BATCH>(
-        string_width,
-        elements,
-        Y_d, X_d,
-        stream,
-        batch_size, num_elements_per_batch);
+    // // Kernel 6.
+    // profile_warp_shuffle<NUM_THREADS_PER_BATCH>(
+    //     string_width,
+    //     elements,
+    //     Y_d, X_d,
+    //     stream,
+    //     batch_size, num_elements_per_batch);
 
     // Kernel 7.
     profile_vectorize_load<NUM_THREADS_PER_BATCH>(
@@ -168,7 +167,6 @@ int main() {
         Y_d, X_d,
         stream,
         batch_size, num_elements_per_batch);
-
 
     CHECK_CUDA_ERROR(cudaFree(X_d));
     CHECK_CUDA_ERROR(cudaFree(Y_d));
